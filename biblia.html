@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bíblia Sagrada</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+        .bible-text { 
+            font-family: 'EB Garamond', serif; 
+            font-size: 1.32rem; 
+            line-height: 2.05; 
+        }
+        
+        /* === ESTILO DOS VERSÍCULOS (Melhorado) === */
+        .verse {
+            padding: 22px 24px;
+            margin-bottom: 12px;
+            border-radius: 16px;
+            background-color: #ffffff;
+            border-left: 5px solid #b91c1c;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .verse:hover {
+            transform: translateX(6px);
+            box-shadow: 0 10px 15px rgba(185, 28, 28, 0.1);
+            background-color: #fffbeb;
+        }
+        
+        .verse.highlight-yellow { background-color: #fef3c7; border-left-color: #eab308; }
+        .verse.highlight-green  { background-color: #d1fae5; border-left-color: #10b981; }
+        .verse.highlight-blue   { background-color: #dbeafe; border-left-color: #3b82f6; }
+        .verse.highlight-pink   { background-color: #fce7f3; border-left-color: #ec4899; }
+
+        .verse-number {
+            color: #b91c1c;
+            font-weight: 700;
+            font-size: 1.35rem;
+            cursor: pointer;
+            user-select: none;
+            width: 42px;
+            flex-shrink: 0;
+        }
+
+        .verse-text {
+            color: #1f2937;
+        }
+    </style>
+</head>
+<body class="bg-stone-100">
+
+<div class="flex h-screen">
+    <!-- Sidebar -->
+    <div class="w-72 bg-white border-r flex flex-col">
+        <div class="p-6 border-b bg-red-700 text-white">
+            <h1 class="text-3xl font-bold flex items-center gap-3">
+                <i class="fa-solid fa-book-bible"></i> Bíblia
+            </h1>
+        </div>
+        
+        <div class="p-5">
+            <select id="version-select" class="w-full p-4 rounded-2xl border text-lg">
+                <option value="arc">ARC - Almeida Revista e Corrigida</option>
+                <option value="nvi">NVI - Nova Versão Internacional</option>
+            </select>
+        </div>
+
+        <div id="books-list" class="flex-1 overflow-auto p-3"></div>
+    </div>
+
+    <!-- Área Principal -->
+    <div class="flex-1 flex flex-col">
+        <div class="h-20 bg-white border-b flex items-center px-8 justify-between">
+            <div class="flex items-center gap-5">
+                <span id="current-book" class="font-bold text-3xl"></span>
+                
+                <select id="chapter-select" onchange="changeChapter(this.value)" 
+                        class="text-xl font-medium px-6 py-3 rounded-2xl border focus:outline-none">
+                </select>
+            </div>
+        </div>
+
+        <div id="bible-content" class="flex-1 overflow-auto p-10 bible-text bg-[#f8f5f0]">
+            <h2 id="chapter-title" class="text-4xl font-bold text-center mb-14 text-red-800"></h2>
+            <div id="verses" class="max-w-3xl mx-auto"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentVersion = "arc";
+    let currentBookId = "gn";
+    let currentBookName = "Gênesis";
+    let currentChapter = 1;
+    let highlights = JSON.parse(localStorage.getItem("bibleHighlights")) || {};
+
+    async function loadBible() {
+        const urls = {
+            arc: "https://raw.githubusercontent.com/maatheusgois/bible/main/versions/pt-br/arc.json",
+            nvi: "https://raw.githubusercontent.com/maatheusgois/bible/main/versions/pt-br/nvi.json"
+        };
+        
+        try {
+            const res = await fetch(urls[currentVersion]);
+            window.bibleData = await res.json();
+            renderBooks();
+            loadChapter();
+        } catch(e) {
+            alert("Erro ao carregar a Bíblia.");
+        }
+    }
+
+    function renderBooks() {
+        const container = document.getElementById("books-list");
+        container.innerHTML = "";
+        
+        window.bibleData.forEach(book => {
+            const div = document.createElement("div");
+            div.className = `px-5 py-4 rounded-2xl cursor-pointer mb-1 text-[15.5px] ${book.id === currentBookId ? 'bg-red-100 text-red-700 font-semibold' : 'hover:bg-stone-100'}`;
+            div.textContent = book.name;
+            div.onclick = () => {
+                currentBookId = book.id;
+                currentBookName = book.name;
+                currentChapter = 1;
+                renderBooks();
+                loadChapter();
+            };
+            container.appendChild(div);
+        });
+    }
+
+    function updateChapterSelector(total) {
+        const select = document.getElementById("chapter-select");
+        select.innerHTML = "";
+        for (let i = 1; i <= total; i++) {
+            const opt = document.createElement("option");
+            opt.value = i;
+            opt.textContent = `Capítulo ${i}`;
+            if (i === currentChapter) opt.selected = true;
+            select.appendChild(opt);
+        }
+    }
+
+    function changeChapter(newChapter) {
+        currentChapter = parseInt(newChapter);
+        loadChapter();
+    }
+
+    function loadChapter() {
+        const book = window.bibleData.find(b => b.id === currentBookId);
+        if (!book) return;
+
+        document.getElementById("current-book").textContent = currentBookName;
+        document.getElementById("chapter-title").textContent = `${currentBookName} ${currentChapter}`;
+        updateChapterSelector(book.chapters.length);
+
+        const container = document.getElementById("verses");
+        container.innerHTML = "";
+
+        const verses = book.chapters[currentChapter - 1] || [];
+
+        verses.forEach((text, i) => {
+            const verseNum = i + 1;
+            const key = `${currentBookId}-${currentChapter}-${verseNum}`;
+            
+            const div = document.createElement("div");
+            div.className = `verse flex gap-6 ${highlights[key] || ''}`;
+            div.innerHTML = `
+                <span class="verse-number" onclick="toggleHighlight('${key}', this)">${verseNum}</span>
+                <span class="verse-text flex-1">${text}</span>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function toggleHighlight(key, element) {
+        const parent = element.parentElement;
+        const colors = ['highlight-yellow','highlight-green','highlight-blue','highlight-pink'];
+        
+        if (parent.classList.contains('highlight-yellow')) {
+            parent.classList.remove(...colors);
+            delete highlights[key];
+        } else {
+            parent.classList.remove(...colors);
+            parent.classList.add('highlight-yellow');
+            highlights[key] = 'highlight-yellow';
+        }
+        localStorage.setItem("bibleHighlights", JSON.stringify(highlights));
+    }
+
+    window.onload = () => {
+        loadBible();
+        
+        document.getElementById("version-select").addEventListener("change", (e) => {
+            currentVersion = e.target.value;
+            loadBible();
+        });
+    };
+</script>
+</body>
+</html><!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bíblia Sagrada</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; }
+        .bible-text { 
+            font-family: 'EB Garamond', serif; 
+            font-size: 1.32rem; 
+            line-height: 2.05; 
+        }
+        
+        /* === ESTILO DOS VERSÍCULOS (Melhorado) === */
+        .verse {
+            padding: 22px 24px;
+            margin-bottom: 12px;
+            border-radius: 16px;
+            background-color: #ffffff;
+            border-left: 5px solid #b91c1c;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+        
+        .verse:hover {
+            transform: translateX(6px);
+            box-shadow: 0 10px 15px rgba(185, 28, 28, 0.1);
+            background-color: #fffbeb;
+        }
+        
+        .verse.highlight-yellow { background-color: #fef3c7; border-left-color: #eab308; }
+        .verse.highlight-green  { background-color: #d1fae5; border-left-color: #10b981; }
+        .verse.highlight-blue   { background-color: #dbeafe; border-left-color: #3b82f6; }
+        .verse.highlight-pink   { background-color: #fce7f3; border-left-color: #ec4899; }
+
+        .verse-number {
+            color: #b91c1c;
+            font-weight: 700;
+            font-size: 1.35rem;
+            cursor: pointer;
+            user-select: none;
+            width: 42px;
+            flex-shrink: 0;
+        }
+
+        .verse-text {
+            color: #1f2937;
+        }
+    </style>
+</head>
+<body class="bg-stone-100">
+
+<div class="flex h-screen">
+    <!-- Sidebar -->
+    <div class="w-72 bg-white border-r flex flex-col">
+        <div class="p-6 border-b bg-red-700 text-white">
+            <h1 class="text-3xl font-bold flex items-center gap-3">
+                <i class="fa-solid fa-book-bible"></i> Bíblia
+            </h1>
+        </div>
+        
+        <div class="p-5">
+            <select id="version-select" class="w-full p-4 rounded-2xl border text-lg">
+                <option value="arc">ARC - Almeida Revista e Corrigida</option>
+                <option value="nvi">NVI - Nova Versão Internacional</option>
+            </select>
+        </div>
+
+        <div id="books-list" class="flex-1 overflow-auto p-3"></div>
+    </div>
+
+    <!-- Área Principal -->
+    <div class="flex-1 flex flex-col">
+        <div class="h-20 bg-white border-b flex items-center px-8 justify-between">
+            <div class="flex items-center gap-5">
+                <span id="current-book" class="font-bold text-3xl"></span>
+                
+                <select id="chapter-select" onchange="changeChapter(this.value)" 
+                        class="text-xl font-medium px-6 py-3 rounded-2xl border focus:outline-none">
+                </select>
+            </div>
+        </div>
+
+        <div id="bible-content" class="flex-1 overflow-auto p-10 bible-text bg-[#f8f5f0]">
+            <h2 id="chapter-title" class="text-4xl font-bold text-center mb-14 text-red-800"></h2>
+            <div id="verses" class="max-w-3xl mx-auto"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentVersion = "arc";
+    let currentBookId = "gn";
+    let currentBookName = "Gênesis";
+    let currentChapter = 1;
+    let highlights = JSON.parse(localStorage.getItem("bibleHighlights")) || {};
+
+    async function loadBible() {
+        const urls = {
+            arc: "https://raw.githubusercontent.com/maatheusgois/bible/main/versions/pt-br/arc.json",
+            nvi: "https://raw.githubusercontent.com/maatheusgois/bible/main/versions/pt-br/nvi.json"
+        };
+        
+        try {
+            const res = await fetch(urls[currentVersion]);
+            window.bibleData = await res.json();
+            renderBooks();
+            loadChapter();
+        } catch(e) {
+            alert("Erro ao carregar a Bíblia.");
+        }
+    }
+
+    function renderBooks() {
+        const container = document.getElementById("books-list");
+        container.innerHTML = "";
+        
+        window.bibleData.forEach(book => {
+            const div = document.createElement("div");
+            div.className = `px-5 py-4 rounded-2xl cursor-pointer mb-1 text-[15.5px] ${book.id === currentBookId ? 'bg-red-100 text-red-700 font-semibold' : 'hover:bg-stone-100'}`;
+            div.textContent = book.name;
+            div.onclick = () => {
+                currentBookId = book.id;
+                currentBookName = book.name;
+                currentChapter = 1;
+                renderBooks();
+                loadChapter();
+            };
+            container.appendChild(div);
+        });
+    }
+
+    function updateChapterSelector(total) {
+        const select = document.getElementById("chapter-select");
+        select.innerHTML = "";
+        for (let i = 1; i <= total; i++) {
+            const opt = document.createElement("option");
+            opt.value = i;
+            opt.textContent = `Capítulo ${i}`;
+            if (i === currentChapter) opt.selected = true;
+            select.appendChild(opt);
+        }
+    }
+
+    function changeChapter(newChapter) {
+        currentChapter = parseInt(newChapter);
+        loadChapter();
+    }
+
+    function loadChapter() {
+        const book = window.bibleData.find(b => b.id === currentBookId);
+        if (!book) return;
+
+        document.getElementById("current-book").textContent = currentBookName;
+        document.getElementById("chapter-title").textContent = `${currentBookName} ${currentChapter}`;
+        updateChapterSelector(book.chapters.length);
+
+        const container = document.getElementById("verses");
+        container.innerHTML = "";
+
+        const verses = book.chapters[currentChapter - 1] || [];
+
+        verses.forEach((text, i) => {
+            const verseNum = i + 1;
+            const key = `${currentBookId}-${currentChapter}-${verseNum}`;
+            
+            const div = document.createElement("div");
+            div.className = `verse flex gap-6 ${highlights[key] || ''}`;
+            div.innerHTML = `
+                <span class="verse-number" onclick="toggleHighlight('${key}', this)">${verseNum}</span>
+                <span class="verse-text flex-1">${text}</span>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    function toggleHighlight(key, element) {
+        const parent = element.parentElement;
+        const colors = ['highlight-yellow','highlight-green','highlight-blue','highlight-pink'];
+        
+        if (parent.classList.contains('highlight-yellow')) {
+            parent.classList.remove(...colors);
+            delete highlights[key];
+        } else {
+            parent.classList.remove(...colors);
+            parent.classList.add('highlight-yellow');
+            highlights[key] = 'highlight-yellow';
+        }
+        localStorage.setItem("bibleHighlights", JSON.stringify(highlights));
+    }
+
+    window.onload = () => {
+        loadBible();
+        
+        document.getElementById("version-select").addEventListener("change", (e) => {
+            currentVersion = e.target.value;
+            loadBible();
+        });
+    };
+</script>
+</body>
+</html>
